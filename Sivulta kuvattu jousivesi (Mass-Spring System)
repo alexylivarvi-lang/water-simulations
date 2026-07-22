@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <title>2D Jousivesi & Kellunta</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    h1 { margin-bottom: 0.2rem; font-size: 1.4rem; }
+    p { margin-top: 0; color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem; }
+    canvas {
+      border: 2px solid #334155;
+      border-radius: 8px;
+      cursor: crosshair;
+      background: #1e293b;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Sivulta kuvattu jousivesi (Mass-Spring System)</h1>
+  <p>Klikkaa tai vedä hiirellä luodaksesi aaltoja. Veteen putoaa myös kelluvia laatikoita!</p>
+
+  <canvas id="canvas" width="800" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Vedenpinnan asetukset
+    const WATER_Y = 250;       // Veden lepokorkeus ruudulla
+    const numColumns = 80;     // Pintapisteiden määrä
+    const spacing = canvas.width / numColumns;
+
+    class WaterColumn {
+      constructor(x) {
+        this.x = x;
+        this.y = WATER_Y;
+        this.targetY = WATER_Y;
+        this.velocity = 0;
+      }
+
+      update(k, damping) {
+        // Jousivoima kohti lepokorkeutta F = -k * x
+        let force = -k * (this.y - this.targetY);
+        this.velocity += force;
+        this.velocity *= damping; // Vaimennus
+        this.y += this.velocity;
+      }
+    }
+
+    // Luodaan pintapisteet
+    const columns = [];
+    for (let i = 0; i < numColumns; i++) {
+      columns.push(new WaterColumn(i * spacing));
+    }
+
+    // Kelluva kappale (laatikko)
+    class FloatingBox {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 40;
+        this.height = 30;
+        this.vy = 0;
+        this.vx = (Math.random() - 0.5) * 2;
+      }
+
+      update() {
+        this.vy += 0.2; // Painovoima
+        this.y += this.vy;
+        this.x += this.vx;
+
+        // Reunoilta pomppiminen
+        if (this.x < 0 || this.x > canvas.width - this.width) this.vx *= -1;
+
+        // Tarkistetaan osuma vedenpintaan (keskikohta)
+        let centerIdx = Math.floor((this.x + this.width / 2) / spacing);
+        if (centerIdx >= 0 && centerIdx < numColumns) {
+          let waterLevel = columns[centerIdx].y;
+          
+          // Jos laatikko on veden alla / pinnan alapuolella
+          if (this.y + this.height > waterLevel) {
+            let immersion = (this.y + this.height) - waterLevel;
+            // Arkhimedeen noste työntää ylöspäin propotionalisesti uppoumaan
+            this.vy -= immersion * 0.05;
+            this.vy *= 0.90; // Veden vastus / kitka
+
+            // Annetaan samalla voimakas isku vedenpinnalle!
+            columns[centerIdx].velocity += this.vy * 0.4;
+          }
+        }
+      }
+
+      draw() {
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x, this.y, this.width, this.height);
+      }
+    }
+
+    const boxes = [
+      new FloatingBox(200, 100),
+      new FloatingBox(500, 50)
+    ];
+
+    // Jousien leviäminen naapureille (Wave propagation)
+    function propagateWaves() {
+      const spread = 0.25; // Kuinka herkästi aalto siirtyy viereiseen pisteeseen
+      let leftDeltas = new Float32Array(numColumns);
+      let rightDeltas = new Float32Array(numColumns);
+
+      for (let j = 0; j < 8; j++) { // Useampi kierros per frame tekee aallosta pehmeän
+        for (let i = 0; i < numColumns; i++) {
+          if (i > 0) {
+            leftDeltas[i] = spread * (columns[i].y - columns[i - 1].y);
+            columns[i - 1].velocity += leftDeltas[i];
+            columns[i - 1].y += leftDeltas[i];
+          }
+          if (i < numColumns - 1) {
+            rightDeltas[i] = spread * (columns[i].y - columns[i + 1].y);
+            columns[i + 1].velocity += rightDeltas[i];
+            columns[i + 1].y += rightDeltas[i];
+          }
+        }
+      }
+    }
+
+    // Pääsilmukka
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Päivitetään jouset
+      const k = 0.025;      // Jousen kireys
+      const damping = 0.985; // Kitka
+
+      for (let col of columns) {
+        col.update(k, damping);
+      }
+
+      propagateWaves();
+
+      // 2. Päivitetään ja piirretään kelluvat laatikot
+      for (let box of boxes) {
+        box.update();
+        box.draw();
+      }
+
+      // 3. Piirretään vesi (pinta + täyttö)
+      ctx.fillStyle = 'rgba(14, 165, 233, 0.4)';
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      ctx.lineTo(0, columns[0].y);
+
+      for (let i = 0; i < numColumns; i++) {
+        ctx.lineTo(columns[i].x, columns[i].y);
+      }
+
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Piirretään itse vedenpinnan viiva
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(columns[0].x, columns[0].y);
+      for (let i = 1; i < numColumns; i++) {
+        ctx.lineTo(columns[i].x, columns[i].y);
+      }
+      ctx.stroke();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Hiiriohjaus veden tökkimiseen
+    let isMouseDown = false;
+    let lastX = 0, lastY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      interact(e);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (isMouseDown) interact(e);
+    });
+
+    window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+    function interact(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      let idx = Math.floor(x / spacing);
+      if (idx >= 0 && idx < numColumns) {
+        columns[idx].y = y; // Siirretään pistettä suoraan hiiren mukaan
+        columns[idx].velocity = (y - WATER_Y) * 0.2;
+      }
+    }
+
+    loop();
+  </script>
+</body>
+</html>
