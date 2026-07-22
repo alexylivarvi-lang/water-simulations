@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <title>Reaaliaikaiset 2D-vesisimulaatiot ja fysiikan kaavat</title>
+  
+  <!-- MathJax LaTeX-kaavojen renderöintiä varten -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px;
+      background: #ffffff;
+    }
+    h1 { color: #0f172a; border-bottom: 2px solid #38bdf8; padding-bottom: 10px; margin-bottom: 5px; }
+    h2 { color: #0284c7; margin-top: 30px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; }
+    .subtitle { color: #64748b; font-size: 1.1rem; margin-bottom: 40px; }
+    .model-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #0284c7;
+      padding: 20px;
+      margin-bottom: 25px;
+      border-radius: 6px;
+    }
+    .formula-title {
+      font-weight: bold;
+      color: #334155;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+    @media print {
+      body { padding: 20px; max-width: 100%; }
+      .model-box { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Reaaliaikaiset 2D-vesisimulaatiot</h1>
+  <div class="subtitle">Kattava tekninen ja matemaattinen dokumentaatio numeerisista nestemalleista</div>
+
+  <p>Tämä dokumentti esittelee neljä erilaista laskennallista menetelmää veden ja fluididynamiikan käyttäytymisen simuloimiseksi tietokoneella. Jokainen malli edustaa omaa fysiikan teorian tasoaan yksinkertaisesta jousipinnasta aina partikkeli- ja ruudukkopohjaisiin osittaisdifferentiaaliyhtälöihin.</p>
+
+  <!-- MALLI 1 -->
+  <div class="model-box">
+    <h2>1. Perusjousi- ja massasysteemi (Mass-Spring System)</h2>
+    <p><strong>Periaate:</strong> Vesipinta on jaettu pystysuoriin pylväisiin, jotka noudattavat Hooken lakia. Naapuripylväät välittävät aaltoliikettä eteenpäin vaakasuunnassa.</p>
+    
+    <div class="formula-title">Hooken laki (palauttava voima):</div>
+    $$F_{k} = -k (y - y_0)$$
+
+    <div class="formula-title">Liikeyhtälö ja vaimennus:</div>
+    $$v_{t} = (v_{t-1} + F_{k}) \times d$$
+    $$y_{t} = y_{t-1} + v_{t}$$
+  </div>
+
+  <!-- MALLI 2 -->
+  <div class="model-box">
+    <h2>2. Kelluntamekaniikka ja vuorovaikutus (Buoyancy Integration)</h2>
+    <p><strong>Periaate:</strong> Edellisen jousipinnan päälle rakennettu fysiikkamalli, joka laskee kiinteiden kappaleiden (laatikoiden) uppoamisen ja syrjäyttämän veden reaktiot.</p>
+
+    <div class="formula-title">Arkhimedeen voima (Noste):</div>
+    $$F_{buoyancy} = -\text{immersion} \times k_{up}$$
+
+    <div class="formula-title">Kappaleen kiihtyvyys:</div>
+    $$v_{y} = v_{y} + g + \frac{F_{buoyancy}}{m}$$
+  </div>
+
+  <!-- MALLI 3 -->
+  <div class="model-box">
+    <h2>3. SPH Partikkelivesi (Smoothed Particle Hydrodynamics)</h2>
+    <p><strong>Periaate:</strong> Lagrangepohjainen menetelmä, jossa vesi koostuu itsenäisistä partikkeleista. Malli laskee paikallisen tiheyden ja paineen naapureiden perusteella.</p>
+
+    <div class="formula-title">Tiheyden estimointi:</div>
+    $$\rho_i = \sum_j m_j W(r_{ij}, h)$$
+
+    <div class="formula-title">Paineen tilanyhtälö (Equation of State):</div>
+    $$P_i = k (\rho_i - \rho_0)$$
+
+    <div class="formula-title">Painevoiman gradientti:</div>
+    $$\mathbf{F}_{pressure, i} = -\sum_j m_j \frac{P_i + P_j}{2 \rho_j} \nabla W(r_{ij}, h)$$
+  </div>
+
+  <!-- MALLI 4 -->
+  <div class="model-box">
+    <h2>4. Matalan veden yhtälöt (Shallow Water Equations - SWE)</h2>
+    <p><strong>Periaate:</strong> Eulerian ruudukkopohjainen numeerinen malli, jota käytetään tulvien ja aaltojen simulaatioissa ratkaisemalla osittaisdifferentiaaliyhtälöitä.</p>
+
+    <div class="formula-title">Massan säilyminen (Continuity Equation):</div>
+    $$\frac{\partial h}{\partial t} + \frac{\partial (h u)}{\partial x} + \frac{\partial (h v)}{\partial y} = 0$$
+
+    <div class="formula-title">Liikemäärän säilyminen (Momentum Equations):</div>
+    $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y} = -g \frac{\partial h}{\partial x}$$
+    $$\frac{\partial v}{\partial t} + u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y} = -g \frac{\partial h}{\partial y}$$
+  </div>
+
+</body>
+</html>
