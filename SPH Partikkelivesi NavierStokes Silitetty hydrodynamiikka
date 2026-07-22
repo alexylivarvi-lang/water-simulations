@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <title>2D SPH Nestesimulaatio (Partikkelifysiikka)</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    h1 { margin-bottom: 0.2rem; font-size: 1.4rem; }
+    p { margin-top: 0; color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem; }
+    canvas {
+      border: 2px solid #334155;
+      border-radius: 8px;
+      cursor: crosshair;
+      background: #1e293b;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>SPH Partikkelivesi (Navier-Stokes / Silitetty hydrodynamiikka)</h1>
+  <p>Klikkaa ja vedä hiirellä heittääksesi vettä ympäri laatikkoa!</p>
+
+  <canvas id="canvas" width="700" height="450"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Fysiikkavakiot
+    const GRAVITY = 0.2;
+    const REST_DENSITY = 0.7;   // Ihannetiheys
+    const PRESSURE_CONST = 12.0;// Paineen voimakkuus (k)
+    const VISCOSITY = 0.15;     // Viskositeetti (sisäinen kitka)
+    const SMOOTHING_RADIUS = 25;// Silityssäde (vaikutusalue h)
+    const PARTICLE_MASS = 1.0;
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.density = 0;
+        this.pressure = 0;
+      }
+    }
+
+    // Luodaan vesiallas täyteen partikkeleita
+    const particles = [];
+    for (let x = 150; x < 350; x += 14) {
+      for (let y = 50; y < 300; y += 14) {
+        particles.push(new Particle(x + Math.random() * 2, y + Math.random() * 2));
+      }
+    }
+
+    // Pääpäivityssilmukka
+    function updatePhysics() {
+      const h = SMOOTHING_RADIUS;
+      const h2 = h * h;
+
+      // 1. Laske tiheys ja paine jokaiselle partikkelille
+      for (let i = 0; i < particles.length; i++) {
+        let p1 = particles[i];
+        p1.density = 0;
+
+        for (let j = 0; j < particles.length; j++) {
+          let p2 = particles[j];
+          let dx = p2.x - p1.x;
+          let dy = p2.y - p1.y;
+          let distSq = dx * dx + dy * dy;
+
+          if (distSq < h2 && distSq > 0) {
+            let dist = Math.sqrt(distSq);
+            let term = h - dist;
+            p1.density += PARTICLE_MASS * term * term;
+          }
+        }
+        if (p1.density < 0.0001) p1.density = 0.0001;
+
+        // Paineen laskentakaava (Equation of State): P = k * (\rho - \rho_0)
+        p1.pressure = PRESSURE_CONST * (p1.density - REST_DENSITY);
+      }
+
+      // 2. Laske voimat (Paine + Viskositeetti + Painovoima)
+      for (let i = 0; i < particles.length; i++) {
+        let p1 = particles[i];
+        let pressureForceX = 0;
+        let pressureForceY = 0;
+        let viscForceX = 0;
+        let viscForceY = 0;
+
+        for (let j = 0; j < particles.length; j++) {
+          if (i === j) continue;
+          let p2 = particles[j];
+          let dx = p2.x - p1.x;
+          let dy = p2.y - p1.y; // Korjattu virhe tästä rivistä
+          let dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < h && dist > 0) {
+            let nx = dx / dist;
+            let ny = dy / dist;
+            let term = h - dist;
+
+            // Painevoiman gradientti: F_pressure = - \nabla P
+            let sharedPressure = (p1.pressure + p2.pressure) / (2 * p2.density);
+            pressureForceX -= nx * term * sharedPressure;
+            pressureForceY -= ny * term * sharedPressure;
+
+            // Viskositeettivoima (nopeuksien tasaus)
+            viscForceX += VISCOSITY * (p2.vx - p1.vx) * term;
+            viscForceY += VISCOSITY * (p2.vy - p1.vy) * term;
+          }
+        }
+
+        // Kokonaiskiihdytys = Voimat / Tiheys + Painovoima
+        p1.vx += (pressureForceX + viscForceX) / p1.density;
+        p1.vy += (pressureForceY + viscForceY) / p1.density + GRAVITY;
+
+        // Hiiren interaktio (työntövoima)
+        if (isMouseDown) {
+          let mdx = mouseX - p1.x;
+          let mdy = mouseY - p1.y;
+          let mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+          if (mdist < 80 && mdist > 0) {
+            p1.vx -= (mdx / mdist) * 0.8;
+            p1.vy -= (mdy / mdist) * 0.8;
+          }
+        }
+      }
+
+      // 3. Siirrä partikkeleita ja tarkista seinätörmäykset
+      const restitution = 0.5; // Kimmoisuus seinistä
+      const margin = 10;
+
+      for (let p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Vasen ja oikea seinä
+        if (p.x < margin) { p.x = margin; p.vx *= -restitution; }
+        if (p.x > canvas.width - margin) { p.x = canvas.width - margin; p.vx *= -restitution; }
+        
+        // Katto ja lattia
+        if (p.y < margin) { p.y = margin; p.vy *= -restitution; }
+        if (p.y > canvas.height - margin) { p.y = canvas.height - margin; p.vy *= -restitution; p.vx *= 0.95; }
+      }
+    }
+
+    // Renderöinti
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Piirretään altaan reunat
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+
+      // Piirretään vesipartikkelit kirkkaina palloina
+      ctx.fillStyle = '#38bdf8';
+      for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Pääsilmukka
+    function loop() {
+      updatePhysics();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    // Hiiriohjaus
+    let isMouseDown = false;
+    let mouseX = 0, mouseY = 0;
+
+    canvas.addEventListener('mousedown', (e) => { isMouseDown = true; updateMouse(e); });
+    canvas.addEventListener('mousemove', (e) => { if (isMouseDown) updateMouse(e); });
+    window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+    function updateMouse(e) {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    }
+
+    loop();
+  </script>
+</body>
+</html>
